@@ -3,36 +3,52 @@ use std::{os::unix::net::UnixDatagram, time::Instant};
 use crate::{ATTEMPTS, PACKAGE, PACKET_SIZE, ResultRow, SOCKETS_PATH};
 
 const SOCKET_PATH: &str = const_str::concat!(SOCKETS_PATH, "datagram");
+const ACK_PATH: &str = const_str::concat!(SOCKETS_PATH, "datagram_ack");
 
 pub fn run_datagram_server() {
     let socket = UnixDatagram::bind(SOCKET_PATH).unwrap();
-    let mut buffer = [0u8; PACKET_SIZE]; // Parce que le socket est "UDP", le packet doit etre de la meme taille.
+    let mut buffer = [0u8; PACKET_SIZE];
+    let expected = PACKET_SIZE as u64 * ATTEMPTS;
+    let mut total = 0u64;
+
     loop {
-        match socket.recv_from(&mut buffer) {
-            Ok((count, _)) => {
-                if count != PACKET_SIZE {
-                    eprintln!("Packet lost !");
-                    continue;
+        match socket.recv(&mut buffer) {
+            Ok(n) => {
+                total += n as u64;
+                if total >= expected {
+                    break;
                 }
             }
-            Err(e) => eprintln!("{}", e),
+            Err(e) => {
+                eprintln!("{e}");
+                break;
+            }
         }
     }
+
+    // Répond sur le socket d'ACK du client
+    let ack_socket = UnixDatagram::unbound().unwrap();
+    ack_socket.send_to(&total.to_le_bytes(), ACK_PATH).unwrap();
 }
 
 pub fn datagram_socket() -> std::io::Result<ResultRow> {
+    // Créer le socket d'ACK AVANT d'envoyer
+    let ack = UnixDatagram::bind(ACK_PATH)?;
+
     let socket = UnixDatagram::unbound().unwrap();
     socket.connect(SOCKET_PATH)?;
 
     let start = Instant::now();
-    // On met la constante dans une variable avant, car Rust optimise l'emplacement
-    // de la variable si elle se trouve au dessus d'une boucle.
-    // On perd en performance si la constante est passée (~31% plus lent)
     let package = PACKAGE;
     for _ in 1..=(ATTEMPTS) {
         socket.send(&package[..])?;
     }
+
+    // Bloquer jusqu'à l'ACK du serveur
+    let mut buf = [0u8; 8];
+    ack.recv(&mut buf)?;
     let duration = start.elapsed();
+
     Ok(ResultRow {
         attempt: ATTEMPTS as u32,
         elapsed_time: duration,
