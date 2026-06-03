@@ -1,9 +1,7 @@
 use comfy_table::Table;
-use std::{
-    io::{Read, Write},
-    os::unix::net::{UnixListener, UnixStream},
-    time::{Duration, Instant},
-};
+use std::time::Duration;
+
+mod unix_stream;
 
 #[derive(Debug)]
 struct ResultRow {
@@ -12,9 +10,9 @@ struct ResultRow {
     socket_type: String,
 }
 
-const PACKET_SIZE: usize = 4096;
-const ATTEMPTS: u64 = 1000_000;
-const PACKAGE: [u8; PACKET_SIZE] = [0u8; PACKET_SIZE];
+pub const PACKET_SIZE: usize = 4096;
+pub const ATTEMPTS: u64 = 1000_000;
+pub const PACKAGE: [u8; PACKET_SIZE] = [0u8; PACKET_SIZE];
 
 impl ResultRow {
     fn calcul_speed(&self) -> f64 {
@@ -37,61 +35,15 @@ fn main() -> std::io::Result<()> {
 
     // Unix Stream (~= local TCP -> envoie les données en stream (flux continu))
     std::thread::spawn(|| {
-        run_unixstream_server();
+        unix_stream::run_unixstream_server();
     });
     std::thread::sleep(std::time::Duration::from_millis(10));
-    result.push(unix_socket()?);
+    result.push(unix_stream::unix_socket()?);
 
     // UnixDatagram (~= local UDP -> envoie les données en packet (batch))
 
     show_results(result);
     Ok(())
-}
-
-fn run_unixstream_server() {
-    let listener = UnixListener::bind("/tmp/rust_unix_socket").unwrap();
-    let mut buffer = [0u8; 4096];
-    match listener.accept() {
-        Ok((mut sock, _addr)) => {
-            for _ in 1..=(ATTEMPTS) {
-                match sock.read(&mut buffer) {
-                    Ok(bytes_lus) => {
-                        if bytes_lus == 0 {
-                            break;
-                        } else {
-                            let message = String::from_utf8_lossy(&buffer[..bytes_lus]);
-                            if message.len() != PACKET_SIZE {}
-                        }
-                    }
-                    Err(e) => {
-                        println!("Erreur: {e}");
-                        break;
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            println!("Erreur lors de la connexion: {e}");
-        }
-    }
-}
-
-fn unix_socket() -> std::io::Result<ResultRow> {
-    let mut stream = UnixStream::connect("/tmp/rust_unix_socket")?;
-    let start = Instant::now();
-    // On met la constante dans une variable avant, car Rust optimise l'emplacement
-    // de la variable si elle se trouve au dessus d'une boucle.
-    // On perd en performance si la constante est passée (~31% plus lent)
-    let mut package = PACKAGE;
-    for _ in 1..=(ATTEMPTS) {
-        stream.write_all(&package)?;
-    }
-    let duration = start.elapsed();
-    Ok(ResultRow {
-        attempt: ATTEMPTS as u32,
-        elapsed_time: duration,
-        socket_type: String::from("UnixStream"),
-    })
 }
 
 fn show_results(result: Vec<ResultRow>) {
