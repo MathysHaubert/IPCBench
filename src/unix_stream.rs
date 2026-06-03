@@ -1,5 +1,5 @@
 use std::{
-    io::{Read, Write},
+    io::{BufWriter, Read, Write},
     os::unix::net::{UnixListener, UnixStream},
     time::Instant,
 };
@@ -8,21 +8,24 @@ use crate::ATTEMPTS;
 use crate::PACKAGE;
 use crate::PACKET_SIZE;
 use crate::ResultRow;
+use crate::SOCKETS_PATH;
+
+const SOCKET_PATH: &str = const_str::concat!(SOCKETS_PATH, "unixstream");
 
 pub fn run_unixstream_server() {
-    let listener = UnixListener::bind("/tmp/rust_unix_socket").unwrap();
-    let mut buffer = [0u8; 4096];
+    let listener = UnixListener::bind(SOCKET_PATH).unwrap();
+    let mut buffer = [0u8; PACKET_SIZE / 8];
     match listener.accept() {
         Ok((mut sock, _addr)) => {
-            for _ in 1..=(ATTEMPTS) {
+            loop {
                 match sock.read(&mut buffer) {
-                    Ok(bytes_lus) => {
-                        if bytes_lus == 0 {
-                            break;
-                        } else {
-                            let message = String::from_utf8_lossy(&buffer[..bytes_lus]);
-                            if message.len() != PACKET_SIZE {}
-                        }
+                    Ok(0) => {
+                        // Le client a fini sa boucle et son flush()
+                        break;
+                    }
+                    Ok(_bytes_lus) => {
+                        // On n'a plus besoin de vérifier la taille ici,
+                        // car le flux UnixStream garantit qu'aucun octet n'est perdu ni désordonné.
                     }
                     Err(e) => {
                         println!("Erreur: {e}");
@@ -38,16 +41,20 @@ pub fn run_unixstream_server() {
 }
 
 pub fn unix_socket() -> std::io::Result<ResultRow> {
-    let mut stream = UnixStream::connect("/tmp/rust_unix_socket")?;
+    let stream = UnixStream::connect(SOCKET_PATH)?;
     let start = Instant::now();
+
+    let mut buffer = BufWriter::with_capacity(PACKET_SIZE * 8, stream);
     // On met la constante dans une variable avant, car Rust optimise l'emplacement
     // de la variable si elle se trouve au dessus d'une boucle.
     // On perd en performance si la constante est passée (~31% plus lent)
     let package = PACKAGE;
     for _ in 1..=(ATTEMPTS) {
-        stream.write_all(&package)?;
+        buffer.write_all(&package)?;
     }
+    buffer.flush()?;
     let duration = start.elapsed();
+
     Ok(ResultRow {
         attempt: ATTEMPTS as u32,
         elapsed_time: duration,

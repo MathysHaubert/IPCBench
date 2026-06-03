@@ -7,6 +7,7 @@ name = "SocketBench"
 version = "0.1.0"
 dependencies = [
  "comfy-table",
+ "const-str",
  "tokio",
 ]
 
@@ -38,6 +39,12 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width",
 ]
+
+[[package]]
+name = "const-str"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3618cccc083bb987a415d85c02ca6c9994ea5b44731ec28b9ecf09658655fba9"
 
 [[package]]
 name = "crossterm"
