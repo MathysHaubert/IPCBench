@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ```text
 ```text
 +-----------------------+---------+---------------+--------------+-------------+
@@ -32,3 +33,16 @@
 ```
 ```text
 ```
+=======
+# IPCBench
+
+Benchmarks IPC Unix sockets (Stream & Datagram) en Rust.
+
+## Results
+
+<!-- BENCH_START -->
+```text
+Run the benchmark to see results.
+```
+<!-- BENCH_END -->
+>>>>>>> 161bcc9 (fix: github action)

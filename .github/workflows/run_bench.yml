@@ -1,4 +1,4 @@
-name: Rust Benchmark 
+name: Rust Benchmark
 run-name: Github is running our benchmark !! 🚀
 
 on:
@@ -6,7 +6,6 @@ on:
     branches:
       - main
 
-# Permet au bot de push les modifications sur le dépôt
 permissions:
   contents: write
 
@@ -25,32 +24,38 @@ jobs:
 
       - name: Exécuter les benchmarks et mettre à jour le README
         run: |
-          # Exécute le bench
           cargo run --release --all-features > bench_result.txt
-          
-          awk '
-            // {
-              print; 
-              print "```text"; 
-              while ((getline < "bench_result.txt") > 0) print; 
-              print "```"; 
-              skip=1; 
-              next
-            }
-            // { skip=0 }
-            !skip
-          ' README.md > README.tmp && mv README.tmp README.md
-          
-          # 3. Nettoyage du fichier temporaire
+
+          python3 - <<'EOF'
+          import re
+
+          with open("bench_result.txt") as f:
+              bench = f.read().strip()
+
+          with open("README.md") as f:
+              content = f.read()
+
+          replacement = f"<!-- BENCH_START -->\n```text\n{bench}\n```\n<!-- BENCH_END -->"
+          content = re.sub(
+              r"<!-- BENCH_START -->.*?<!-- BENCH_END -->",
+              replacement,
+              content,
+              flags=re.DOTALL,
+          )
+
+          with open("README.md", "w") as f:
+              f.write(content)
+          EOF
+
           rm bench_result.txt
 
       - name: Commit et Push des résultats
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
+
           git add README.md
-          
+
           if ! git diff --cached --quiet; then
             git commit -m "docs: mise à jour des benchmarks [skip ci]"
             git push
