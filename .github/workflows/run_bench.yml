@@ -1,0 +1,59 @@
+name: Rust Benchmark 
+run-name: Github is running our benchmark !! 🚀
+
+on:
+  push:
+    branches:
+      - main
+
+# Permet au bot de push les modifications sur le dépôt
+permissions:
+  contents: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer la toolchain Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build du projet en Release
+        run: cargo build --release --all-features
+
+      - name: Exécuter les benchmarks et mettre à jour le README
+        run: |
+          # Exécute le bench
+          cargo run --release --all-features > bench_result.txt
+          
+          awk '
+            // {
+              print; 
+              print "```text"; 
+              while ((getline < "bench_result.txt") > 0) print; 
+              print "```"; 
+              skip=1; 
+              next
+            }
+            // { skip=0 }
+            !skip
+          ' README.md > README.tmp && mv README.tmp README.md
+          
+          # 3. Nettoyage du fichier temporaire
+          rm bench_result.txt
+
+      - name: Commit et Push des résultats
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git add README.md
+          
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: mise à jour des benchmarks [skip ci]"
+            git push
+          else
+            echo "Aucun changement détecté dans les benchmarks."
+          fi
