@@ -71,6 +71,6 @@ pub fn unix_socket() -> std::io::Result<ResultRow> {
     Ok(ResultRow {
         attempt: ATTEMPTS as u32,
         elapsed_time: duration,
-        socket_type: String::from("UnixStream"),
+        socket_type: String::from("Socket - UnixStream"),
     })
 }

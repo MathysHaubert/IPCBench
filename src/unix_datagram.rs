@@ -52,6 +52,6 @@ pub fn datagram_socket() -> std::io::Result<ResultRow> {
     Ok(ResultRow {
         attempt: ATTEMPTS as u32,
         elapsed_time: duration,
-        socket_type: String::from("UnixDatagram"),
+        socket_type: String::from("Socket - UnixDatagram"),
     })
 }

@@ -1,82 +1,54 @@
-use comfy_table::Table;
 use std::{
     fs::{create_dir, remove_dir_all},
     path::Path,
-    thread::sleep,
     time::Duration,
 };
 
+use crate::core::ResultRow;
+
+mod core;
 mod unix_datagram;
 mod unix_stream;
-
-#[derive(Debug)]
-struct ResultRow {
-    attempt: u32,
-    elapsed_time: Duration,
-    socket_type: String,
-}
 
 pub const PACKET_SIZE: usize = 65_536;
 pub const ATTEMPTS: u64 = 1000_000;
 pub const PACKAGE: [u8; PACKET_SIZE] = [0u8; PACKET_SIZE];
 pub const SOCKETS_PATH: &'static str = "/tmp/sockets/";
 
-impl ResultRow {
-    fn calcul_speed(&self) -> f64 {
-        let total_bytes = PACKET_SIZE as f64 * self.attempt as f64;
-
-        let total_mo = total_bytes / (1024.0 * 1024.0);
-
-        let secondes = self.elapsed_time.as_secs_f64();
-
-        if secondes > 0.0 {
-            total_mo / secondes
-        } else {
-            0.0
-        }
-    }
-}
-
 fn main() -> std::io::Result<()> {
-    let mut result: Vec<ResultRow> = Vec::new();
+    let mut result: Vec<core::ResultRow> = Vec::new();
 
     if !Path::new(SOCKETS_PATH).exists() {
         create_dir(SOCKETS_PATH)?;
     }
 
     // Unix Stream (~= local TCP -> envoie les données en stream (flux continu))
-    std::thread::spawn(|| {
-        unix_stream::run_unixstream_server();
-    });
-    std::thread::sleep(std::time::Duration::from_millis(10));
-    result.push(unix_stream::unix_socket()?);
+    match start_bench(unix_stream::run_unixstream_server, unix_stream::unix_socket) {
+        Ok(result_row) => result.push(result_row),
+        Err(_) => eprintln!("Error on UnixStream bench"),
+    };
 
     // UnixDatagram (~= local UDP -> envoie les données en packet (batch))
-    std::thread::spawn(|| {
-        unix_datagram::run_datagram_server();
-    });
-    sleep(Duration::from_millis(10));
-    result.push(unix_datagram::datagram_socket()?);
+    match start_bench(
+        unix_datagram::run_datagram_server,
+        unix_datagram::datagram_socket,
+    ) {
+        Ok(result_row) => result.push(result_row),
+        Err(_) => eprintln!("Error on UnixDatagram bench"),
+    };
 
     // Show data + clean sockets
-    show_results(result);
+    core::show_results(result);
     remove_dir_all(SOCKETS_PATH)?;
     Ok(())
 }
 
-fn show_results(result: Vec<ResultRow>) {
-    let mut table = Table::new();
-
-    table.set_header(vec!["Type", "Attemps", "Time", "Speed", "Packet size"]);
-    for resultat in result {
-        table.add_row(vec![
-            resultat.socket_type.clone(),
-            resultat.attempt.to_string(),
-            format!("{:?}", resultat.elapsed_time),
-            format!("{:.2} Mo/s", resultat.calcul_speed()),
-            PACKET_SIZE.to_string(),
-        ]);
-    }
-
-    println!("{table}");
+fn start_bench<S, C>(s: S, c: C) -> std::io::Result<ResultRow>
+where
+    S: Fn() + Send + 'static,
+    C: Fn() -> std::io::Result<ResultRow>,
+{
+    std::thread::spawn(s);
+    std::thread::sleep(Duration::from_millis(10));
+    c()
 }
